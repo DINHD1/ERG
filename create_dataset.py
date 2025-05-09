@@ -38,7 +38,8 @@ def make_dataset(
             history = []
 
         user_content = f"""
-Conversation context: {row['context']}
+Conversation emotion: {row['context']}
+Context: {row['prompt']}
 Conversation history:
 {''.join(history)}
 """
