@@ -1,3 +1,5 @@
 results/
 myenv/
 *test*.py
+*.json
+*.arrow
