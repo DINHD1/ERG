@@ -1,31 +1,37 @@
 import os
-
+from typing import List
 from .model import get_model_tokenizer
 from .dataset import get_datasets
 
 def training_process(
-        model_id:str, 
-        train_path:str, 
-        test_path:str,
+        pre_init: tuple,
+        model_key:str, 
+        data_version:str,
+        ratio: float,
+        distribution_type: str,
         checkpoint_save_dir:str,
-        use_lora: bool,
         num_train_epochs:int = 4,
         train_batch_size:int = 8,
         eval_batch_size:int = 8,
-        learning_rate: float = 2e-4
+        learning_rate: float = 2e-4,
+        fsdp_config = None,
     ):
     os.environ["ACCELERATE_USE_FSDP"]= "true"
     
-    model, tokenizer = get_model_tokenizer(model_id = model_id)
-
-    converted_traindata, converted_testdata = get_datasets(
-        train_path = train_path, 
-        test_path = test_path
-    )
-
     import numpy as np
     from torchmetrics.functional.text import bleu_score
     from torchmetrics.functional.text.rouge import rouge_score
+    from trl import SFTConfig, SFTTrainer
+
+    if pre_init is None:
+        model, tokenizer, lora_config = get_model_tokenizer(
+            model_key = model_key,
+            distribution_type = distribution_type
+        )
+    else:
+        model, tokenizer, lora_config = pre_init
+
+    converted_traindata, converted_validdata, converted_testdata = get_datasets(data_version, ratio)
 
     def preprocess_logits_for_metrics(logits, labels):
         if isinstance(logits, tuple):
@@ -53,52 +59,55 @@ def training_process(
         rouge_value = rouge_score(preds=decoded_preds, target=decoded_labels)
         return {
             "bleu": bleu_value,
-            "rouge": rouge_value
+            "rouge1_fmeasure": rouge_value['rouge1_fmeasure'],
+            "rouge2_fmeasure": rouge_value['rouge2_fmeasure'],
+            "rougeL_fmeasure": rouge_value['rougeL_fmeasure']
         }
-    
-    from trl import SFTConfig, SFTTrainer
-
-    if use_lora:
-        from peft import LoraConfig
-        
-        lora_config = LoraConfig(
-            r=8,
-            target_modules=["q_proj", "o_proj", "k_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
-            task_type="CAUSAL_LM",
-        )
-    else:
-        lora_config = None
     
     trainer = SFTTrainer(
         model = model,
         processing_class = tokenizer,
         train_dataset = converted_traindata,
-        eval_dataset = converted_testdata,
+        eval_dataset = converted_validdata,
         compute_metrics = compute_metrics,
         preprocess_logits_for_metrics = preprocess_logits_for_metrics,
         args = SFTConfig(
             do_train = True,
-            do_eval = False,
+            do_eval = True,
+            eval_strategy = 'epoch',
+            jit_mode_eval = False,
             num_train_epochs = num_train_epochs,
             per_device_train_batch_size = train_batch_size,
             per_device_eval_batch_size = eval_batch_size,
-            gradient_accumulation_steps= 3,
+            dataset_num_proc = 4,
+            dataloader_pin_memory = True,
+            dataloader_drop_last=True,
+            dataloader_num_workers = 2,
+            dataloader_prefetch_factor = 3,
+            gradient_accumulation_steps = 8,
             warmup_steps=2,
             completion_only_loss = True,
             learning_rate=learning_rate,
             bf16=True,
             bf16_full_eval = True,
             max_length = 128,
+            packing = False,   # packing is False to get completion_mask for `DataCollatorForLanguageModeling`
             max_seq_length = 128,
+            optim = 'adamw_torch_fused',
+            label_names=["labels"],
             logging_strategy = 'epoch',
-            output_dir="outputs",
+            report_to = "none",
+            output_dir = checkpoint_save_dir,
+            fsdp = fsdp_config['fsdp_sharding_strategy'].lower() if fsdp_config is not None else '',
+            fsdp_config = fsdp_config,
         ),
         peft_config=lora_config, # lora config
     )
+
     print('start training')
     trainer.train()
-    print('done training, saving model')
-    trainer.save_model(checkpoint_save_dir)
-    print('run evaluate')
+    # print('run evaluate')
     output_metrics = trainer.evaluate()
     print('output metrics: ', output_metrics)
+    print('done training, saving model')
+    trainer.save_model(checkpoint_save_dir)

@@ -38,8 +38,8 @@ def make_dataset(
             history = []
 
         user_content = f"""
-Conversation emotion: {row['context']}
-Context: {row['prompt']}
+Conversation context: {row['context']}
+Context: {row['prompt'].replace('_comma_',',')}
 Conversation history:
 {''.join(history)}
 """
