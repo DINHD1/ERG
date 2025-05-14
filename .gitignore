@@ -1,7 +1,6 @@
 results/
 myenv/
 *test*.py
-*.json
-*.arrow
-!data/**/*.json  # Cho phép file .json trong data/
-!data/**/*.arrow  # Cho phép file .arrow trong data/
+*test*.sh
+.temp*/
+*.pyc
