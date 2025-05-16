@@ -2,6 +2,8 @@ import os
 from typing import List
 from .model import get_model_tokenizer
 from .dataset import get_datasets
+from .mock import MockSFTTrainer
+from .constants import COLLATOR_INST_TEMPLATE, COLLATOR_RESP_TEMPLATE
 
 def training_process(
         pre_init: tuple,
@@ -21,7 +23,7 @@ def training_process(
     import numpy as np
     from torchmetrics.functional.text import bleu_score
     from torchmetrics.functional.text.rouge import rouge_score
-    from trl import SFTConfig, SFTTrainer
+    from trl import SFTConfig
 
     if pre_init is None:
         model, tokenizer, lora_config = get_model_tokenizer(
@@ -44,7 +46,7 @@ def training_process(
         # In case the model returns more than the prediction logits
         if isinstance(preds, tuple):
             preds = preds[0]
-    
+
         preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         
@@ -64,7 +66,7 @@ def training_process(
             "rougeL_fmeasure": rouge_value['rougeL_fmeasure']
         }
     
-    trainer = SFTTrainer(
+    trainer = MockSFTTrainer(
         model = model,
         processing_class = tokenizer,
         train_dataset = converted_traindata,
@@ -75,7 +77,7 @@ def training_process(
             do_train = True,
             do_eval = True,
             eval_strategy = 'epoch',
-            jit_mode_eval = False,
+            torch_compile = True,
             num_train_epochs = num_train_epochs,
             per_device_train_batch_size = train_batch_size,
             per_device_eval_batch_size = eval_batch_size,
@@ -84,15 +86,15 @@ def training_process(
             dataloader_drop_last=True,
             dataloader_num_workers = 2,
             dataloader_prefetch_factor = 3,
-            gradient_accumulation_steps = 8,
+            gradient_accumulation_steps = 4,
             warmup_steps=2,
             completion_only_loss = True,
             learning_rate=learning_rate,
             bf16=True,
             bf16_full_eval = True,
-            max_length = 128,
-            packing = False,   # packing is False to get completion_mask for `DataCollatorForLanguageModeling`
-            max_seq_length = 128,
+            max_length = 768,
+            packing = False,   # packing is False to get completion_mask for `sft.DataCollatorForLanguageModeling`
+            max_seq_length = None,
             optim = 'adamw_torch_fused',
             label_names=["labels"],
             logging_strategy = 'epoch',
@@ -106,8 +108,8 @@ def training_process(
 
     print('start training')
     trainer.train()
-    # print('run evaluate')
+    print('run evaluate')
     output_metrics = trainer.evaluate()
     print('output metrics: ', output_metrics)
-    print('done training, saving model')
-    trainer.save_model(checkpoint_save_dir)
+    # print('done training, saving model')
+    # trainer.save_model(checkpoint_save_dir)

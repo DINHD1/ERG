@@ -42,9 +42,9 @@
       "num_bytes": 5757761,
       "num_examples": 8401,
       "shard_lengths": [
+        2100,
+        2107,
         2099,
-        2105,
-        2102,
         2095
       ],
       "dataset_name": "generator"

@@ -74,17 +74,10 @@ if __name__ == '__main__':
     VERSION = "2_1"
     # empathetic_dialogues
     data = load_dataset("facebook/empathetic_dialogues", trust_remote_code=True)
-    traindata = data['train'] #.select(list(range(40000)))
+    traindata = data['train']
     valdata = data['validation']
     testdata = data['test']
 
     make_dataset(traindata, "train", VERSION)
     make_dataset(valdata, "valid", VERSION)
     make_dataset(testdata, "test", VERSION)
-
-
-
-# import os
-# os.chdir('project_codes')
-
-# !python create_datasetv2.py
