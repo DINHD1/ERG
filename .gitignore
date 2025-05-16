@@ -1,6 +1,10 @@
 results/
 myenv/
 *test*.py
+<<<<<<< HEAD
 *test*.sh
 .temp*/
 *.pyc
+=======
+__pycache__/
+>>>>>>> db11a7c (add data from terminal)
