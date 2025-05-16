@@ -71,13 +71,31 @@ def make_dataset(
     print('duration: ', time.time() - _start_time)
 
 if __name__ == '__main__':
+<<<<<<< HEAD
     VERSION = "2_0"
     # empathetic_dialogues
     data = load_dataset("facebook/empathetic_dialogues", trust_remote_code=True)
     traindata = data['train'].select(list(range(40000)))
+=======
+    VERSION = "2_1"
+    # empathetic_dialogues
+    data = load_dataset("facebook/empathetic_dialogues", trust_remote_code=True)
+    traindata = data['train'] #.select(list(range(40000)))
+>>>>>>> 9ba42092e947eb41fecef528772e6f97241c43f3
     valdata = data['validation']
     testdata = data['test']
 
     make_dataset(traindata, "train", VERSION)
     make_dataset(valdata, "valid", VERSION)
+<<<<<<< HEAD
     make_dataset(testdata, "test", VERSION)
+=======
+    make_dataset(testdata, "test", VERSION)
+
+
+
+# import os
+# os.chdir('project_codes')
+
+# !python create_datasetv2.py
+>>>>>>> 9ba42092e947eb41fecef528772e6f97241c43f3

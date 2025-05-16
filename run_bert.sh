@@ -30,7 +30,12 @@ case "$1" in
                 --distribution_type cuda \
                 --model_key bert \
                 --train_batch_size 64 \
+<<<<<<< HEAD
                 --eval_batch_size 64
+=======
+                --eval_batch_size 64 \
+                --epoch 6
+>>>>>>> 9ba42092e947eb41fecef528772e6f97241c43f3
         
         else
             echo unknow value of tpu option: "${run_with_tpu}"

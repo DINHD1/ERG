@@ -9,6 +9,10 @@ def main(
         fsdp_config_path:str,
         train_batch_size: int, 
         eval_batch_size: int,
+<<<<<<< HEAD
+=======
+        epoch: int,
+>>>>>>> 9ba42092e947eb41fecef528772e6f97241c43f3
         pre_init: tuple = None
     ):
     
@@ -27,7 +31,11 @@ def main(
         ratio = None,
         distribution_type = distribution_type,
         checkpoint_save_dir = os.path.join(os.path.dirname(__file__),"checkpoints"),
+<<<<<<< HEAD
         num_train_epochs = 3,
+=======
+        num_train_epochs = epoch,
+>>>>>>> 9ba42092e947eb41fecef528772e6f97241c43f3
         train_batch_size = train_batch_size,
         eval_batch_size = eval_batch_size,
         learning_rate = 1e-5,
@@ -40,6 +48,10 @@ if __name__ == '__main__':
     parser.add_argument('--model_key', type=str)
     parser.add_argument('--train_batch_size', type=int, default= 12)
     parser.add_argument('--eval_batch_size', type=int, default= 12)
+<<<<<<< HEAD
+=======
+    parser.add_argument('--epoch', type=int, default= 3)
+>>>>>>> 9ba42092e947eb41fecef528772e6f97241c43f3
     parser.add_argument('--fsdp_config_path', type=str, default= "")
     args = parser.parse_args()
     
@@ -68,4 +80,8 @@ if __name__ == '__main__':
             fsdp_config_path = args.fsdp_config_path,
             train_batch_size = args.train_batch_size, 
             eval_batch_size = args.eval_batch_size,
+<<<<<<< HEAD
+=======
+            epoch = args.epoch
+>>>>>>> 9ba42092e947eb41fecef528772e6f97241c43f3
         )
