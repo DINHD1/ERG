@@ -1,16 +1,21 @@
 import os
-from typing import List
 from .model import get_model_tokenizer
 from .dataset import get_datasets
+from .constants import (
+    DISTRIBUTION_TYPE, 
+    DISTRIBUTION_DEVICE,
+)
 from .mock import MockSFTTrainer
-from .constants import COLLATOR_INST_TEMPLATE, COLLATOR_RESP_TEMPLATE
+from .utils import LearningRateLogger
 
 def training_process(
         pre_init: tuple,
         model_key:str, 
         data_version:str,
         ratio: float,
-        distribution_type: str,
+        distribution_device: DISTRIBUTION_DEVICE,
+        distribution_type: DISTRIBUTION_TYPE,
+        logging_dir:str,
         checkpoint_save_dir:str,
         num_train_epochs:int = 4,
         train_batch_size:int = 8,
@@ -18,16 +23,39 @@ def training_process(
         learning_rate: float = 2e-4,
         fsdp_config = None,
     ):
-    os.environ["ACCELERATE_USE_FSDP"]= "true"
-    
+
+    # config diff between fsdp and ddp
+    if distribution_type == "fsdp":
+        os.environ["ACCELERATE_USE_FSDP"]= "true"
+        torch_compile_config = {
+            "torch_compile": False,
+            "torch_compile_backend": None,
+            "torch_compile_mode": None,
+            "ddp_find_unused_parameters": False,
+        }
+        max_length = 1024
+        dataloader_prefetch_factor = 3
+        gradient_accumulation_steps = 6
+    else:
+        torch_compile_config = {
+            "torch_compile": True,
+            "torch_compile_backend": "inductor",
+            "torch_compile_mode": "default",
+            "ddp_find_unused_parameters": True,
+        }
+        max_length = 640 if model_key == "gemma" else 512
+        dataloader_prefetch_factor = 2
+        gradient_accumulation_steps = 3
+
     import numpy as np
     from torchmetrics.functional.text import bleu_score
     from torchmetrics.functional.text.rouge import rouge_score
-    from trl import SFTConfig
+    from trl import SFTConfig, SFTTrainer
 
     if pre_init is None:
         model, tokenizer, lora_config = get_model_tokenizer(
             model_key = model_key,
+            distribution_device = distribution_device,
             distribution_type = distribution_type
         )
     else:
@@ -50,9 +78,24 @@ def training_process(
         preds = np.where(preds != -100, preds, tokenizer.pad_token_id)
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         
+#         print(f"""
+# DEBUG:
+# raw label: {labels[0]}
+# -------------------------------------
+# """)
+        
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-        
+
+
+#         print(f"""
+# DEBUG:
+# decoded pred: {tokenizer.decode(preds[0], skip_special_tokens=False)}       
+# decoded label: {tokenizer.decode(labels[0], skip_special_tokens=False)}
+# -------------------------------------
+# """)
+
+
         # Some simple post-processing
         decoded_preds = [pred.strip() for pred in decoded_preds]
         decoded_labels = [[label.strip()] for label in decoded_labels]
@@ -73,11 +116,12 @@ def training_process(
         eval_dataset = converted_validdata,
         compute_metrics = compute_metrics,
         preprocess_logits_for_metrics = preprocess_logits_for_metrics,
+        callbacks = [LearningRateLogger()],
         args = SFTConfig(
             do_train = True,
             do_eval = True,
             eval_strategy = 'epoch',
-            torch_compile = True,
+            save_strategy = 'no',
             num_train_epochs = num_train_epochs,
             per_device_train_batch_size = train_batch_size,
             per_device_eval_batch_size = eval_batch_size,
@@ -85,23 +129,29 @@ def training_process(
             dataloader_pin_memory = True,
             dataloader_drop_last=True,
             dataloader_num_workers = 2,
-            dataloader_prefetch_factor = 3,
-            gradient_accumulation_steps = 4,
-            warmup_steps=2,
-            completion_only_loss = True,
+            dataloader_prefetch_factor = dataloader_prefetch_factor,
+            gradient_accumulation_steps = gradient_accumulation_steps,
             learning_rate=learning_rate,
-            bf16=True,
-            bf16_full_eval = True,
-            max_length = 768,
-            packing = False,   # packing is False to get completion_mask for `sft.DataCollatorForLanguageModeling`
+            fp16=True,
+            fp16_full_eval = True,
+            max_length = max_length,
+            completion_only_loss = True,
+            packing = False, # True when use native trl.SFTTrainer, False when use MockSFTTrainer
+            eval_packing = False,
+            jit_mode_eval = False,
             max_seq_length = None,
+            lr_scheduler_type = 'cosine_with_min_lr',
+            warmup_steps= 3,
+            lr_scheduler_kwargs = {"min_lr": 1e-6, "num_cycles": 1.5},
             optim = 'adamw_torch_fused',
             label_names=["labels"],
-            logging_strategy = 'epoch',
+            logging_strategy = 'steps',
+            logging_dir = logging_dir,
             report_to = "none",
             output_dir = checkpoint_save_dir,
             fsdp = fsdp_config['fsdp_sharding_strategy'].lower() if fsdp_config is not None else '',
             fsdp_config = fsdp_config,
+            **torch_compile_config
         ),
         peft_config=lora_config, # lora config
     )
@@ -111,5 +161,5 @@ def training_process(
     print('run evaluate')
     output_metrics = trainer.evaluate()
     print('output metrics: ', output_metrics)
-    # print('done training, saving model')
-    # trainer.save_model(checkpoint_save_dir)
+    print('done training, saving model')
+    trainer.save_model(checkpoint_save_dir)

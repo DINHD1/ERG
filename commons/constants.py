@@ -5,8 +5,8 @@ MODEL_KEY2IDS = {
     "gemma": "google/gemma-3-1b-it"
 }
 
-LORA_PARAMS = {
-    "r":16,
+LORA_PARAMS1 = {
+    "r":8,
     "lora_alpha": 32,
     "lora_dropout": 0.05,
     "bias":"none",
@@ -14,7 +14,28 @@ LORA_PARAMS = {
     "task_type": "CAUSAL_LM"
 }
 
-DISTRIBUTION_TYPES = Literal["No","cuda","tpu"]
+
+LORA_PARAMS2 = {
+    "r":8,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "bias":"none",
+    "target_modules": ["q_proj", "o_proj", "k_proj", "v_proj"],
+    "task_type": "CAUSAL_LM"
+}
+
+
+BERT_LORA_PARAMS = {
+    "r":8,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "bias":"none",
+    "target_modules": ["query", "key", "value"],
+    "task_type": "CAUSAL_LM"
+}
+
+DISTRIBUTION_DEVICE = Literal["No","cuda","tpu"]
+DISTRIBUTION_TYPE = Literal["fsdp","ddp"]
 
 COLLATOR_INST_TEMPLATE = "<start_of_turn>user"
 COLLATOR_RESP_TEMPLATE = "<start_of_turn>model"

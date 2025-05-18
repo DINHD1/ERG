@@ -1,13 +1,19 @@
 from .special_tokens import adjust_tokenizer
-from .constants import DISTRIBUTION_TYPES, MODEL_KEY2IDS, LORA_PARAMS
+from .constants import (
+    DISTRIBUTION_TYPE, 
+    DISTRIBUTION_DEVICE,
+    MODEL_KEY2IDS, 
+    LORA_PARAMS1,
+    LORA_PARAMS2,
+    BERT_LORA_PARAMS
+)
 
 from peft import LoraConfig
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
     PreTrainedTokenizer,
-    PreTrainedModel,
-    BitsAndBytesConfig
+    PreTrainedModel
 )
 import torch
 from typing import Tuple, Union
@@ -15,48 +21,61 @@ from types import NoneType
 import os
 
 def _get_pretrained_model(
-        model_id:str, 
-        distribution_type: DISTRIBUTION_TYPES
+        model_id:str,
+        distribution_device: DISTRIBUTION_DEVICE,
+        distribution_type: DISTRIBUTION_TYPE
     )->PreTrainedModel:
     r"""
     Get pretrained model depend on `distribution_type`:
         - in distribution on TPU, no device map used
         - in distribution on GPUs, map device with `PartialState`
     """
-    if distribution_type == "cuda":
-        from accelerate import PartialState
-        device_map={'':PartialState().process_index}
-    elif distribution_type == "tpu":
-        device_map=None
+    if distribution_device == "cuda":
+        if distribution_type == "fsdp":
+            from transformers import BitsAndBytesConfig
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16,
+                bnb_4bit_quant_storage=torch.bfloat16
+            )
+            loading_dtype = torch.bfloat16
+        elif distribution_type == "ddp":
+            quantization_config=None
+            loading_dtype = torch.float32
+        else:
+            raise NotImplementedError
+
+    elif distribution_device == "tpu":
+        quantization_config=None
+        loading_dtype = None
     else:
-        device_map=None
-        
+        quantization_config=None
+        loading_dtype = None
+    
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         attn_implementation='eager',
-        torch_dtype=torch.bfloat16,
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
-            bnb_4bit_quant_storage=torch.bfloat16
-        )
+        torch_dtype=loading_dtype,
+        quantization_config = quantization_config,
     )
     return model
 
 def get_model_tokenizer(
         model_key:str = "gemma",
-        distribution_type: DISTRIBUTION_TYPES = "cuda"
+        distribution_device: DISTRIBUTION_DEVICE = "cuda",
+        distribution_type: DISTRIBUTION_TYPE = "ddp"
     )->Tuple[PreTrainedModel, PreTrainedTokenizer,Union[LoraConfig, NoneType]]:
     
     if model_key == "gemma":
         tokenizer = AutoTokenizer.from_pretrained(MODEL_KEY2IDS[model_key])
         model = _get_pretrained_model(
             model_id= MODEL_KEY2IDS[model_key],
+            distribution_device = distribution_device,
             distribution_type = distribution_type
         )
         lora_config = LoraConfig(
-            **LORA_PARAMS
+            **LORA_PARAMS1
         )
         return model, tokenizer, lora_config
 
@@ -64,9 +83,14 @@ def get_model_tokenizer(
         tokenizer = AutoTokenizer.from_pretrained(os.path.dirname(__file__).replace("commons","tokenizer"))
         model = AutoModelForCausalLM.from_pretrained(
             MODEL_KEY2IDS[model_key],
+            attn_implementation='eager',
+            torch_dtype=torch.float32
         )
         model, tokenizer = adjust_tokenizer(model, tokenizer)
-        return model, tokenizer, None
+        lora_config = LoraConfig(
+            **BERT_LORA_PARAMS
+        )
+        return model, tokenizer, lora_config
         
     else:
         raise NotImplemented(f"Only support key in: {list(MODEL_KEY2IDS.keys())}")
