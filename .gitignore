@@ -4,3 +4,7 @@ myenv/
 *test*.sh
 .temp*/
 *.pyc
+data/1_0/
+data/2_0/
+data/2_1/
+__pycache__/
