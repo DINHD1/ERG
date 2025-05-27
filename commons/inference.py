@@ -27,25 +27,49 @@ class Serving(object):
             max_length:int,
             checkpoint_dir:str,
             result_dir: str,
-            torch_compile_config: dict
+            torch_compile_config: dict,
+            lora_config: dict,
+            inference_batch_size:int = 2
             ):
         print("Serving init on device: ", device)
-        base_model, self.tokenizer, _ = get_model_tokenizer(
+        
+        if lora_config is not None:
+            base_model, self.tokenizer, _ = get_model_tokenizer(
+                model_key= model_key, 
+                distribution_device= distribution_device, 
+                distribution_type = distribution_type
+            )
+            base_model = base_model.to(torch.float16)
+            precompile_model = PeftModel.from_pretrained(base_model, checkpoint_dir).to(device)
+
+            self.model = torch.compile(
+                precompile_model, 
+                mode=torch_compile_config['torch_compile_mode'],
+                backend=torch_compile_config['torch_compile_backend']
+            )
+            self.model.eval()
+
+        else:
+            precompile_model, self.tokenizer, _ = get_model_tokenizer(
             model_key= model_key, 
-            distribution_device= distribution_device, 
-            distribution_type = distribution_type
-        )
-        base_model = base_model.to(torch.float16)
-        merged_model = PeftModel.from_pretrained(base_model, checkpoint_dir).to(device)
-        self.model = torch.compile(
-            merged_model, 
-            mode=torch_compile_config['torch_compile_mode'],
-            backend=torch_compile_config['torch_compile_backend']
-        )
-        self.model.eval()
+            distribution_device = distribution_device, 
+            distribution_type = distribution_type,
+            checkpoint_dir = checkpoint_dir
+            )
+            self.model = precompile_model.to(torch.float16).to(device)
+            self.model.eval()
+            print('precompile_model: ', type(self.model))
+
+            self.model.forward = torch.compile(
+                self.model.forward, 
+                mode=torch_compile_config['torch_compile_mode'],
+                backend=torch_compile_config['torch_compile_backend']
+            )
 
         self.result_dir = result_dir
         self.max_length = max_length
+        self.device = device
+        self.inference_batch_size = inference_batch_size
         print('done init')
 
     def _tokenize(self, row):
@@ -72,10 +96,10 @@ class Serving(object):
                 add_special_tokens = False,
                 padding = "max_length",
                 truncation= True,
-                max_length= self.max_length,
+                max_length= self.max_length - self._generation_config['max_new_tokens'],
                 padding_side = 'left',
                 return_tensors = 'pt'
-            ).to(self.model.device)
+            ).to(self.device)
             
             with torch.inference_mode():
                 outputs = self.model.generate(
@@ -89,7 +113,7 @@ class Serving(object):
 
         dataset = dataset.map(
             lambda x: _infer(x), 
-            batch_size = 6, 
+            batch_size = self.inference_batch_size, 
             batched = True,
             desc="generating answers"
         )

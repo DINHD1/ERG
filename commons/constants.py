@@ -1,8 +1,27 @@
 from typing import Literal
 
 MODEL_KEY2IDS = {
-    "bert": "google-bert/bert-base-uncased",
-    "gemma": "google/gemma-3-1b-it"
+    "bart": "facebook/bart-large",
+    "gemma": "google/gemma-3-1b-it",
+    "lstm": "google/gemma-3-1b-it"
+}
+
+LR_KEY2IDS = {
+    "bart": {
+        "init_lr": 1e-5,
+        "min_lr": 1e-9,
+        "num_cycles": 0.5
+    },
+    "gemma": {
+        "init_lr": 1e-5,
+        "min_lr": 1e-9,
+        "num_cycles": 0.5
+    },
+    "lstm": {
+        "init_lr": 1e-3,
+        "min_lr": 1e-5,
+        "num_cycles": 0.5
+    }
 }
 
 LORA_PARAMS1 = {
@@ -24,15 +43,6 @@ LORA_PARAMS2 = {
     "task_type": "CAUSAL_LM"
 }
 
-
-BERT_LORA_PARAMS = {
-    "r":8,
-    "lora_alpha": 32,
-    "lora_dropout": 0.05,
-    "bias":"none",
-    "target_modules": ["query", "key", "value"],
-    "task_type": "CAUSAL_LM"
-}
 
 DISTRIBUTION_DEVICE = Literal["No","cuda","tpu"]
 DISTRIBUTION_TYPE = Literal["fsdp","ddp"]

@@ -5,15 +5,14 @@ from .dataset import get_datasets
 from .constants import (
     DISTRIBUTION_TYPE, 
     DISTRIBUTION_DEVICE,
+    LR_KEY2IDS
 )
 
 from .inference import Serving
 
 from .mock import MockSFTTrainer, MockSFTTrainerV2
 from .utils import LearningRateLogger
-from transformers import (
-    PrinterCallback
-)
+from transformers.trainer_callback import PrinterCallback
 
 import gc
 import torch
@@ -30,7 +29,6 @@ def training_process(
         num_train_epochs:int = 4,
         train_batch_size:int = 8,
         eval_batch_size:int = 8,
-        learning_rate: float = 2e-4,
         fsdp_config = None,
     ):
 
@@ -52,7 +50,7 @@ def training_process(
             "torch_compile_backend": "inductor",
             "torch_compile_mode": "default"
         }
-        max_length = 2176 if model_key == "gemma" else 512
+        max_length = 2176 if model_key == "gemma" else 2048
         dataloader_prefetch_factor = 2
         gradient_accumulation_steps = 8
 
@@ -89,46 +87,45 @@ def training_process(
         labels = np.where(labels != -100, labels, tokenizer.pad_token_id)
         
 
-        print(f"""
-DEBUG:
-raw label: {labels[0]}
--------------------------------------
-""")
+#         print(f"""
+# DEBUG:
+# raw label: {labels[0]}
+# -------------------------------------
+# """)
         
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
 
-        print(f"""
--------------------------------------
-DEBUG:
-decoded pred: {tokenizer.decode(preds[2], skip_special_tokens=False).strip()}
-decoded label: {tokenizer.decode(labels[2], skip_special_tokens=False).strip()}
--------------------------------------
-""")
+#         print(f"""
+# -------------------------------------
+# DEBUG:
+# decoded pred: {tokenizer.decode(preds[2], skip_special_tokens=False).strip()}
+# decoded label: {tokenizer.decode(labels[2], skip_special_tokens=False).strip()}
+# -------------------------------------
+# """)
 
 
-        # Some simple post-processing
         decoded_preds = [pred.strip() for pred in decoded_preds]
         decoded_labels = [[label.strip()] for label in decoded_labels]
         
 
 
-        print(f"""
--------------------------------------
-DEBUG:
-final pred: {decoded_preds[5]}
-final label: {decoded_labels[5]}
--------------------------------------
-""")
+#         print(f"""
+# -------------------------------------
+# DEBUG:
+# final pred: {decoded_preds[5]}
+# final label: {decoded_labels[5]}
+# -------------------------------------
+# """)
 
-        print(f"""
--------------------------------------
-DEBUG:
-final pred: {decoded_preds[6]}
-final label: {decoded_labels[6]}
--------------------------------------
-""")
+#         print(f"""
+# -------------------------------------
+# DEBUG:
+# final pred: {decoded_preds[6]}
+# final label: {decoded_labels[6]}
+# -------------------------------------
+# """)
 
 
         bleu_value = bleu_score(preds=decoded_preds, target=decoded_labels)
@@ -147,7 +144,7 @@ final label: {decoded_labels[6]}
         eval_dataset = converted_validdata,
         compute_metrics = compute_metrics,
         preprocess_logits_for_metrics = preprocess_logits_for_metrics,
-        callbacks = [LearningRateLogger()],
+        callbacks = [LearningRateLogger],
         args = SFTConfig(
             do_train = True,
             do_eval = False,
@@ -166,7 +163,6 @@ final label: {decoded_labels[6]}
             dataloader_num_workers = 2,
             dataloader_prefetch_factor = dataloader_prefetch_factor,
             gradient_accumulation_steps = gradient_accumulation_steps,
-            learning_rate=learning_rate,
             fp16=True,
             fp16_full_eval = True,
             max_length = max_length,
@@ -175,14 +171,18 @@ final label: {decoded_labels[6]}
             eval_packing = False,
             jit_mode_eval = False,
             max_seq_length = None,
+            learning_rate=LR_KEY2IDS[model_key]["init_lr"],
             lr_scheduler_type = 'cosine_with_min_lr',
             warmup_steps= 10,
-            lr_scheduler_kwargs = {"min_lr": 1e-9, "num_cycles": 0.5},
+            lr_scheduler_kwargs = {
+                "min_lr": LR_KEY2IDS[model_key]["min_lr"], 
+                "num_cycles": LR_KEY2IDS[model_key]["num_cycles"]
+            },
             optim = 'adamw_torch_fused',
             weight_decay = 0.005,
             label_names=["labels"],
-            logging_strategy = 'steps',
-            logging_steps = 1,
+            logging_strategy = 'no',
+            # logging_steps = 1,
             logging_dir = logging_dir,
             disable_tqdm = False,
             report_to = "none",
@@ -193,7 +193,7 @@ final label: {decoded_labels[6]}
         ),
         peft_config=lora_config, # lora config
     )
-    trainer.remove_callback(PrinterCallback)
+    # trainer.remove_callback(PrinterCallback())
     print('start training')
     trainer.train()
     print('run evaluate')
@@ -226,6 +226,8 @@ final label: {decoded_labels[6]}
             max_length = max_length,
             checkpoint_dir = current_ckpt_dir,
             result_dir = os.path.join(checkpoint_save_dir.replace('checkpoints','inference_outputs'), current_time),
-            torch_compile_config = torch_compile_config
+            torch_compile_config = torch_compile_config,
+            lora_config = lora_config,
+            inference_batch_size = eval_batch_size
         )
         s.inference(converted_testdata)
