@@ -111,13 +111,13 @@ def training_process(
         
 
 
-#         print(f"""
-# -------------------------------------
-# DEBUG:
-# final pred: {decoded_preds[5]}
-# final label: {decoded_labels[5]}
-# -------------------------------------
-# """)
+        print(f"""
+-------------------------------------
+DEBUG:
+final pred: {decoded_preds[5]}
+final label: {decoded_labels[5]}
+-------------------------------------
+""")
 
 #         print(f"""
 # -------------------------------------
