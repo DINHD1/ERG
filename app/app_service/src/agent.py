@@ -77,6 +77,8 @@ class Agent(object):
         else:
             chat_history = []
 
+        print(chat_history)
+
         # construct messages
         messages = [{
             "content": self.SYSTEM_PROMT,
