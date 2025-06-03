@@ -52,7 +52,7 @@ def training_process(
         }
         max_length = 2176 if model_key == "gemma" else 2048
         dataloader_prefetch_factor = 2
-        gradient_accumulation_steps = 6
+        gradient_accumulation_steps = 6 if model_key != "lstm" else 2
 
     import numpy as np
     from torchmetrics.functional.text import bleu_score

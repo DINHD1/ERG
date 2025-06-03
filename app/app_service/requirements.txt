@@ -1,0 +1,7 @@
+fastapi
+loguru
+uvicorn
+requests
+python-dotenv
+jinja2
+websockets
