@@ -20,5 +20,5 @@ pip install --quiet bitsandbytes
 echo done isntall bitsandbytes
 
 huggingface-cli download \
-  Daiphuoc/gemma3-loras \
+  Diezu/gemma3-loras \
   --local-dir "$2"
