@@ -15,23 +15,23 @@ function display_chat_history(topic_value) {
             topic_value: topic_value
         })
     })
-    .then((response)=> {
-        if (response.ok) {
-            response.json()
-            .then((chat_history)=>{
-                for (i = 0; i < chat_history.length; i++) {
-                    showMessageByRole(
-                        chat_history[i]['parts'],
-                        chat_history[i]['role'],
-                        chat_history[i]['timestamp']
-                    );
-                }
-            });
-        } else {
-            console.log('error loading old messages');
-        }
-        
-    });
+        .then((response) => {
+            if (response.ok) {
+                response.json()
+                    .then((chat_history) => {
+                        for (i = 0; i < chat_history.length; i++) {
+                            showMessageByRole(
+                                chat_history[i]['content'],
+                                chat_history[i]['role'],
+                                chat_history[i]['timestamp']
+                            );
+                        }
+                    });
+            } else {
+                console.log('error loading old messages');
+            }
+
+        });
 
 }
 
@@ -45,23 +45,23 @@ class WebSocket_Handler {
     constructor() {
         this.ws = new WebSocket("ws://localhost:8080/ws");
         this.topic_value = '';
-        
+
         this.ws.addEventListener("message", (event) => {
             let processed_data = JSON.parse(event.data);
-            
+
             // display new message
             showMessageByRole(processed_data['msg'], 'model');
-            
+
             // key `topic` only appear when `new_chat` is created
             if ('topic' in processed_data) {
                 let new_id = $("[id^=topic_]").length;
                 $("#all_topics").append(`<li id="topic_${new_id}">${processed_data['topic']}</li>`);
-    
+
                 this.topic_value = processed_data['topic'];
             }
         });
     }
-   
+
 }
 
 function chatsession_callback() {
@@ -83,7 +83,7 @@ function chatsession_callback() {
         // step (2)
         display_chat_history(ws_handler.topic_value);
     }
-    
+
 }
 
 function load_topics() {
@@ -101,27 +101,27 @@ function load_topics() {
             'user': 'user'
         })
     })
-    .then((response)=> {
-        if (response.ok) {
-            response.json()
-            .then((response_topics)=>{
+        .then((response) => {
+            if (response.ok) {
+                response.json()
+                    .then((response_topics) => {
 
-                for (i = 0; i < response_topics.length; i++) {
-                    // append topic elements to `all_topics`
-                    $("#all_topics").append(`<li id="topic_${i}">${response_topics[i]}</li>`)
-                    
-                    // assign click handler
-                    $(`li#topic_${i}`).on("click", chatsession_callback);
-                    console.log('done assign handler to topics');
-                }
+                        for (i = 0; i < response_topics.length; i++) {
+                            // append topic elements to `all_topics`
+                            $("#all_topics").append(`<li id="topic_${i}">${response_topics[i]}</li>`)
 
-                return null;
-            });
-        } else {
-            console.log('error loading topics');
-        }
-        return null;
-    });
+                            // assign click handler
+                            $(`li#topic_${i}`).on("click", chatsession_callback);
+                            console.log('done assign handler to topics');
+                        }
+
+                        return null;
+                    });
+            } else {
+                console.log('error loading topics');
+            }
+            return null;
+        });
 
     return null;
 }
@@ -136,26 +136,26 @@ const ws_handler = new WebSocket_Handler();
  * (3) Sends a message when the 'Enter' key is pressed
  * (4) Assign event handler to `send_button`
  */
-$(document).ready(function(){
+$(document).ready(function () {
     // (1)
     load_topics(ws_handler);
 
     // (2)
     $("#create_new_chat").on('click', chatsession_callback);
-    
+
     // (3)
-    $('#msg_input').keydown(function(e) {
+    $('#msg_input').keydown(function (e) {
         // Check for 'Enter' key
         if (e.key === 'Enter') {
             // Prevent default behaviour of enter key
             e.preventDefault();
-			// Trigger send button click event
+            // Trigger send button click event
             $('#send_button').click();
         }
     });
 
     // (4)
-    $("#send_button").click(function() {
+    $("#send_button").click(function () {
         // step (3)
         var user_input_message = $('#msg_input').val();
         let user_timestamp = (getCurrentTimestamp()).toLocaleString('en-IN', {
@@ -164,7 +164,7 @@ $(document).ready(function(){
             hour: 'numeric',
             minute: 'numeric',
         });
-        showMessageByRole(user_input_message, 'user',user_timestamp);
+        showMessageByRole(user_input_message, 'user', user_timestamp);
         $('#msg_input').val('');
 
         ws_handler.ws.send(JSON.stringify({

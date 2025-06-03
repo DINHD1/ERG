@@ -77,7 +77,7 @@ class Agent(object):
         else:
             chat_history = []
 
-        print(chat_history)
+        logger.infor("chat history: {},  topic: {}".format(chat_history, topic))
 
         # construct messages
         messages = [{
