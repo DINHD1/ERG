@@ -8,10 +8,10 @@ main_lora_path="$lora_module_path/2025-05-30_15-57-36"
 OPTS=$(getopt -o "" --long hf:,ngrok:,domain: -- "$@")
 eval set -- "$OPTS"
 
+huggingface-cli login --token $2
+
 setup_path=$app_dir/infer_service/setup.sh
 bash "$setup_path" --lora_path "$lora_module_path"
-
-huggingface-cli login --token $2
 
 ngrok config add-authtoken $4
 vllm serve "$base_model" \
